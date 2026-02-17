@@ -57,7 +57,10 @@ CURRENT_DATASET = DATASET_CONFIGS[BASE_DATASET_NAME]
 # Putanje
 RAW_DATA_DIR = os.path.join('data', 'raw')
 # Folder ce biti npr: data/processed/higgs_100k/
-PROCESSED_DATA_DIR = os.path.join('data', 'processed', DATASET_NAME) 
+if os.path.exists('/content/drive/MyDrive'):
+    PROCESSED_DATA_DIR = os.path.join('/content/drive/MyDrive/Colab Notebooks/Colab Notebooks Datasets/', DATASET_NAME)
+else:    
+    PROCESSED_DATA_DIR = os.path.join('data', 'processed', DATASET_NAME) 
 
 # baseline MLP params
 BASELINE_HIDDEN_DIM = 64
