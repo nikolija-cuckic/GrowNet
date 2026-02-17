@@ -5,7 +5,7 @@ TEST_SIZE = 0.2
 BATCH_SIZE = 64   
 
 # dataset parameters
-BASE_DATASET_NAME = 'slice_localization'  # 'california_housing', 'slice_localization', 'higgs'
+BASE_DATASET_NAME = 'higgs'  # 'california_housing', 'slice_localization', 'higgs'
 
 # --- HIGGS SPECIFIC SETTINGS ---
 # Opcije: '100k', '1M'
