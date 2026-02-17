@@ -162,10 +162,15 @@ class BaseTrainer:
             return False   
 
     def restore_best_model(self):
-        """Vraca najbolje tezine. Child klase mogu ovo da override-uju."""
+        """Vraca najbolje tezine. Child klase (GrowNet) mogu ovo da override-uju."""
         if self.best_model_state is not None:
             # Default ponasanje za statičke modele (BaselineMLP)
-            self.model.load_state_dict(self.best_model_state)
+            # Ovo ce se izvrsiti za Baseline, a za GrowNet ce se izvrsiti ONA TVOJA metoda
+            try:
+                self.model.load_state_dict(self.best_model_state)
+            except Exception as e:
+                print(f"[WARN] Failed to restore best model: {e}")
+
 
     def run_training(self):
         print(f"\n[INFO] Starting training: {self.exp_name} ({self.task_type})")
@@ -213,7 +218,6 @@ class BaseTrainer:
             if self.check_early_stopping(current_metric):
                 print(f"\n[INFO] Early stopping triggered at epoch {epoch+1}!")
                 print(f"[INFO] Restoring best model weights (Score: {self.best_score:.4f})")
-                self.model.load_state_dict(self.best_model_state) # Vrati najbolji model
 
                 self.restore_best_model()
 
@@ -229,7 +233,7 @@ class BaseTrainer:
         
         # Ali Pazi: Ako NIJE okinuo early stop, moramo biti sigurni da je best_model_state sacuvan
         if self.best_model_state is not None:
-             self.model.load_state_dict(self.best_model_state)
+            self.restore_best_model()
 
         # 6. Final Log & Save
         # Ponovo evaluiraj model jer su sada ucitane NAJBOLJE tezine, a ne poslednje

@@ -8,14 +8,15 @@ from utils.data_loader import load_data
 import config
 
 # --- KONFIGURACIJA SWEEP-A ---
-DATASETS_TO_RUN = ['slice_localization'] #, 'higgs_100k']
+DATASETS_TO_RUN = ['slice_localization'] #, 'california_housing', 'higgs_100k']
 
 # Parametri za testiranje (Grid Search)
-NUM_STAGES_LIST = [10, 20, 30]
-HIDDEN_DIMS_LIST = [32, 64]
-SHRINKAGE_LIST = [0.05, 0.1]
-USE_CS_LIST = [False]  # Mozes dodati False ako zelis ablaciju
+NUM_STAGES_LIST = [30]
+HIDDEN_DIMS_LIST = [32, 64, 128]
+SHRINKAGE_LIST = [0.1]
+USE_CS_LIST = [True]  # Mozes dodati False ako zelis ablaciju
 CS_EVERY_LIST = [1]   # Na koliko koraka ide CS (ako je CS=True)
+CS_EPOCHS_LIST = [1]
 RANDOM_SEEDS = [42]
 
 def run_sweep():
@@ -26,6 +27,7 @@ def run_sweep():
         SHRINKAGE_LIST, 
         USE_CS_LIST, 
         CS_EVERY_LIST,
+        CS_EPOCHS_LIST,
         RANDOM_SEEDS
     ))
     
@@ -69,7 +71,7 @@ def run_sweep():
 
         # --- 3. Grid Search Petlja ---
         for params in param_combinations:
-            (stages, hidden_dim, shrinkage, use_cs, cs_every, seed) = params
+            (stages, hidden_dim, shrinkage, use_cs, cs_every, cs_epochs, seed) = params
             
             current_exp += 1
             print(f"   [{current_exp}/{total_experiments}] GrowNet: {stages} stages, {hidden_dim} dim, shr={shrinkage}, CS={use_cs} (every {cs_every})")
@@ -80,10 +82,10 @@ def run_sweep():
             config.GROWNET_SHRINKAGE = shrinkage
             config.GROWNET_USE_CS = use_cs
             config.GROWNET_CS_EVERY = cs_every
+            config.GROWNET_CS_EPOCHS = cs_epochs
             
             # Fiksni parametri (mozes i njih da sweep-ujes ako hoces)
             config.GROWNET_WEAK_LR = 0.001 
-            config.GROWNET_CS_EPOCHS = 1
             config.RANDOM_SEED = seed
             
             # Set seed
@@ -94,10 +96,6 @@ def run_sweep():
             # Init Model (GrowNet pocinje prazan ili sa 1. stage-om, zavisno od implementacije)
             model = GrowNet(
                 input_dim=input_dim,
-                output_dim=1,
-                num_stages=stages,
-                weak_hidden_dim=hidden_dim,
-                task_type=task_type
             ).to(config.DEVICE)
             
             # Init Trainer

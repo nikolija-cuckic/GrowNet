@@ -52,7 +52,7 @@ class GrowNetTrainer(BaseTrainer):
             p.requires_grad = True
 
         # Optimizer samo za novi WL
-        optimizer = torch.optim.Adam(new_wl.parameters(), lr=config.GROWNET_WEAK_LR)
+        optimizer = torch.optim.Adam(new_wl.parameters(), lr=config.GROWNET_WEAK_LR, weight_decay=0.001)
 
         # -------------------------------------------------------------
         # 2. Boosting Step: Treniraj novi WL na rezidualima
@@ -79,7 +79,14 @@ class GrowNetTrainer(BaseTrainer):
                 y_pred_old = current_full_pred - config.GROWNET_SHRINKAGE * new_wl(x_batch)
 
             # Cilj za novi WL: residual
-            residuals = y_batch - y_pred_old
+            # POPRAVKA ZA 1st ORDER GRADIENT BOOSTING
+            if self.task_type == 'classification':
+                # Rezidual = y - prob (NE y - logit)
+                # y_pred_old su logiti
+                residuals = y_batch - torch.sigmoid(y_pred_old)
+            else:
+                residuals = y_batch - y_pred_old
+
             
             # Forward novog WL
             pred_res = new_wl(x_batch)
@@ -104,7 +111,7 @@ class GrowNetTrainer(BaseTrainer):
             for p in self.model.parameters():
                 p.requires_grad = True
                 
-            cs_optimizer = torch.optim.Adam(self.model.parameters(), lr=config.GROWNET_WEAK_LR)
+            cs_optimizer = torch.optim.Adam(self.model.parameters(), lr=config.GROWNET_WEAK_LR, weight_decay=0.001)
             
             # Vrtimo CS nekoliko epoha (definisano u configu)
             for _ in range(config.GROWNET_CS_EPOCHS):

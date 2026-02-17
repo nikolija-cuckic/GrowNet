@@ -7,8 +7,7 @@ venv/
 env/
 
 # Data & Models 
-data/raw/
-data/processed/
+data/
 checkpoints/
 logs/
 plots/
@@ -20,3 +19,6 @@ plots/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+*.png
+*.ipynb
