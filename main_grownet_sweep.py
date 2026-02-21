@@ -7,33 +7,34 @@ from models.grownet import GrowNet
 from utils.data_loader import load_data
 import config
 
-# --- KONFIGURACIJA SWEEP-A ---
-DATASETS_TO_RUN = ['slice_localization'] #, 'california_housing', 'higgs_100k']
+# sweep config - running multiple experiments at once for MLP network
+DATASETS_TO_RUN = ['california_housing'] #'slice_localization', 'higgs_100k', 'higgs_1M 
 
-# Parametri za testiranje (Grid Search)
 NUM_STAGES_LIST = [30]
-HIDDEN_DIMS_LIST = [32, 64, 128]
+HIDDEN_DIMS_LIST = [16]
 SHRINKAGE_LIST = [0.1]
-USE_CS_LIST = [True]  # Mozes dodati False ako zelis ablaciju
-CS_EVERY_LIST = [1]   # Na koliko koraka ide CS (ako je CS=True)
+USE_CS_LIST = [True]
+CS_EVERY_LIST = [1]
 CS_EPOCHS_LIST = [1]
 RANDOM_SEEDS = [42]
+BATCH_SIZE_LIST = [1024] 
+
 
 def run_sweep():
-    # Kreiramo sve kombinacije parametara
     param_combinations = list(itertools.product(
-        NUM_STAGES_LIST, 
-        HIDDEN_DIMS_LIST, 
-        SHRINKAGE_LIST, 
-        USE_CS_LIST, 
+        NUM_STAGES_LIST,
+        HIDDEN_DIMS_LIST,
+        SHRINKAGE_LIST,
+        USE_CS_LIST,
         CS_EVERY_LIST,
         CS_EPOCHS_LIST,
-        RANDOM_SEEDS
+        RANDOM_SEEDS,
+        BATCH_SIZE_LIST  
     ))
-    
+
     total_experiments = len(DATASETS_TO_RUN) * len(param_combinations)
     current_exp = 0
-    
+
     print(f"==================================================")
     print(f"STARTING GROWNET SWEEP")
     print(f"Datasets: {DATASETS_TO_RUN}")
@@ -41,8 +42,7 @@ def run_sweep():
     print(f"==================================================\n")
 
     for dataset_name in DATASETS_TO_RUN:
-        
-        # --- 1. Dataset Config Setup (Isto kao za Baseline) ---
+        # monkey patching over config
         if 'higgs' in dataset_name:
             config.BASE_DATASET_NAME = 'higgs'
             config.HIGGS_SIZE = dataset_name.replace('higgs_', '')
@@ -57,59 +57,50 @@ def run_sweep():
             config.CURRENT_DATASET = config.DATASET_CONFIGS[dataset_name]
             config.USE_SUBSET = False
             config.PROCESSED_DATA_DIR = os.path.join('data', 'processed', config.DATASET_NAME)
-            
+
         print(f"\n---> Dataset: {config.DATASET_NAME}")
-        
-        # --- 2. Ucitavanje podataka ---
-        try:
-            train_loader, test_loader, input_dim, _ = load_data()
-        except FileNotFoundError:
-            print(f"     [SKIP] Data not found for {dataset_name}. Run preprocess first!")
-            continue
 
         task_type = config.CURRENT_DATASET['task_type']
 
-        # --- 3. Grid Search Petlja ---
         for params in param_combinations:
-            (stages, hidden_dim, shrinkage, use_cs, cs_every, cs_epochs, seed) = params
-            
+            (stages, hidden_dim, shrinkage, use_cs, cs_every, cs_epochs, seed, batch_size) = params
+
             current_exp += 1
-            print(f"   [{current_exp}/{total_experiments}] GrowNet: {stages} stages, {hidden_dim} dim, shr={shrinkage}, CS={use_cs} (every {cs_every})")
+            print(f"   [{current_exp}/{total_experiments}] GrowNet: {stages} stages, "
+                  f"{hidden_dim} dim, shr={shrinkage}, CS={use_cs} (every {cs_every}), "
+                  f"batch={batch_size}")   
             
-            # --- Postavljamo parametre u config ---
             config.GROWNET_NUM_STAGES = stages
             config.GROWNET_WEAK_HIDDEN_DIM = hidden_dim
             config.GROWNET_SHRINKAGE = shrinkage
             config.GROWNET_USE_CS = use_cs
             config.GROWNET_CS_EVERY = cs_every
             config.GROWNET_CS_EPOCHS = cs_epochs
-            
-            # Fiksni parametri (mozes i njih da sweep-ujes ako hoces)
-            config.GROWNET_WEAK_LR = 0.001 
+            config.GROWNET_WEAK_LR = 0.001
             config.RANDOM_SEED = seed
-            
-            # Set seed
+            config.BATCH_SIZE = batch_size   
+
+            try:
+                train_loader, test_loader, input_dim, _ = load_data()
+            except FileNotFoundError:
+                print(f"     [SKIP] Data not found for {dataset_name}.")
+                continue
+
             torch.manual_seed(seed)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed(seed)
-                
-            # Init Model (GrowNet pocinje prazan ili sa 1. stage-om, zavisno od implementacije)
-            model = GrowNet(
-                input_dim=input_dim,
-            ).to(config.DEVICE)
-            
-            # Init Trainer
+
+            model = GrowNet(input_dim=input_dim).to(config.DEVICE)
+
             trainer = GrowNetTrainer(
                 model=model,
                 train_loader=train_loader,
                 test_loader=test_loader,
                 task_type=task_type
             )
-            
-            # Run Training
+
             trainer.run_training()
-            
-            # Cleanup
+
             del model
             del trainer
             torch.cuda.empty_cache()
@@ -118,6 +109,7 @@ def run_sweep():
     print("SWEEP COMPLETED!")
     print("Check logs/experiments.csv for results.")
     print("==================================================")
+
 
 if __name__ == "__main__":
     run_sweep()

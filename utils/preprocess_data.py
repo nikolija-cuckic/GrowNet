@@ -7,7 +7,8 @@ from sklearn.preprocessing import StandardScaler
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import config
-
+# run only once on raw data, 
+# get train.csv test.csv and scaler.pkl in separate folders for different datasets
 def preprocess():
     dataset_name = config.DATASET_NAME
     ds_config = config.CURRENT_DATASET
@@ -23,53 +24,47 @@ def preprocess():
         
     os.makedirs(save_dir, exist_ok=True)
     
-    # --- PRIPREMA PARAMETARA ZA UCITAVANJE ---
     load_params = {}
     
-    # 1. Subset (Limitiramo broj redova pri citanju)
+    # subset used for Higgs dataset (original - 11M rows, we use either 100k or 1M)
     if config.USE_SUBSET:
-        print(f"             ⚠️  SUBSET ACTIVE: Reading first {config.SUBSET_SIZE} rows")
+        print(f"             SUBSET ACTIVE: Reading first {config.SUBSET_SIZE} rows")
         load_params['nrows'] = config.SUBSET_SIZE
     
-    # 2. Header
+    # header
     if not ds_config.get('has_header', True):
         load_params['header'] = None
 
-    # --- UCITAVANJE ---
     print("             Loading CSV...")
-    # Ovde koristimo **load_params da raspakujemo nrows i header argumente
     df = pd.read_csv(raw_path, **load_params)
     
-    # --- IMENOVANJE KOLONA (Ako nema header) ---
+    # if not header, assigning column names 
     if not ds_config.get('has_header', True):
         print("             Assigning column names...")
-        # Higgs ima 1 target + 28 feature-a
-        # Provera da li se dimenzije slazu
+        # checking dimensions
         num_cols = df.shape[1]
         col_names = [ds_config['target_col']] + [f"feature_{i}" for i in range(num_cols - 1)]
         df.columns = col_names
 
     print(f"             Original shape: {df.shape}")
 
-    # --- CISCENJE ---
+    # dropping columns (not number type and nulls)
     if ds_config['drop_cols']:
         df = df.drop(columns=ds_config['drop_cols'], errors='ignore')
         
     df = df.dropna()
     
-    # --- SPLIT X / y ---
+    # split X / y
     target_col = ds_config['target_col']
     X = df.drop(columns=[target_col])
     y = df[target_col]
 
-    # --- TRAIN / TEST SPLIT ---
-    # Shuffle je ovde TRUE po defaultu, sto je dobro!
-    # Iako smo uzeli prvih 100k, barem cemo ih dobro izmesati izmedju train i test
+    # train / test split, shuffle = true by default
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=config.TEST_SIZE, random_state=config.RANDOM_SEED
     )
 
-    # --- SKALIRANJE ---
+    # scaling via standard scaler both X and y for regression, only X for classification
     print("             Scaling...")
     scaler_X = StandardScaler()
     X_train_scaled = scaler_X.fit_transform(X_train)
@@ -81,11 +76,10 @@ def preprocess():
         y_train_scaled = scaler_y.fit_transform(y_train.values.reshape(-1, 1))
         y_test_scaled = scaler_y.transform(y_test.values.reshape(-1, 1))
     else:
-        # Za klasifikaciju ne skaliramo y
         y_train_scaled = y_train.values.reshape(-1, 1)
         y_test_scaled = y_test.values.reshape(-1, 1)
 
-    # --- CUVANJE ---
+    # saving
     print("             Saving...")
     train_df = pd.DataFrame(X_train_scaled, columns=X.columns)
     train_df[target_col] = y_train_scaled

@@ -9,12 +9,11 @@ from utils.logger import ExperimentLogger
 import config
 import os
 
-# --- KONFIGURACIJA SWEEP-A ---
-DATASETS_TO_RUN = ['higgs_1M'] #'slice_localization'] #'higgs_100k', 
-HIDDEN_LAYERS_LIST = [3]       # Dubine koje testiramo
-HIDDEN_DIMS_LIST = [32]     # Sirine koje testiramo
-RANDOM_SEEDS = [42]                  # Mozes dodati vise seed-ova za robustnost (npr. [42, 123])
-
+# sweep config - running multiple experiments at once for MLP network
+DATASETS_TO_RUN = ['california_housing'] #'slice_localization', 'higgs_100k', 'higgs_1M 
+HIDDEN_LAYERS_LIST = [3]      
+HIDDEN_DIMS_LIST = [32]     
+RANDOM_SEEDS = [42]                  
 def run_sweep():
     total_experiments = len(DATASETS_TO_RUN) * len(HIDDEN_LAYERS_LIST) * len(HIDDEN_DIMS_LIST) * len(RANDOM_SEEDS)
     current_exp = 0
@@ -29,22 +28,16 @@ def run_sweep():
 
     for dataset_name in DATASETS_TO_RUN:
         
-        # 1. Postavljanje dataset config-a
-        # Moramo "hakovati" config.py promenljive jer se one ucitavaju na importu.
-        # Srecom, python dozvoljava monkey-patching.
-        
-        # Resetujemo config na zeljeni dataset
+        # monkey patching
         if 'higgs' in dataset_name:
             config.BASE_DATASET_NAME = 'higgs'
-            config.HIGGS_SIZE = dataset_name.replace('higgs_', '') # '100k' ili '1M'
-            
-            # Rekreiramo logiku iz config.py za higgs
+
+            config.HIGGS_SIZE = dataset_name.replace('higgs_', '') # '100k', '1M'
             config.DATASET_NAME = dataset_name
             config.CURRENT_DATASET = config.DATASET_CONFIGS['higgs']
             config.SUBSET_SIZE = 100000 if config.HIGGS_SIZE == '100k' else 1000000
             config.USE_SUBSET = (config.HIGGS_SIZE != 'full')
             
-            # Update putanje (ovo je bitno za load_data)
             config.PROCESSED_DATA_DIR = os.path.join('data', 'processed', config.DATASET_NAME)
             
         else:
@@ -56,7 +49,6 @@ def run_sweep():
             
         print(f"\n---> Dataset: {config.DATASET_NAME}")
         
-        # 2. Ucitavanje podataka (samo jednom po datasetu da ustedimo vreme)
         try:
             train_loader, test_loader, input_dim, _ = load_data()
         except FileNotFoundError:
@@ -65,17 +57,15 @@ def run_sweep():
 
         task_type = config.CURRENT_DATASET['task_type']
 
-        # 3. Grid Search Petlja
+        # Grid Search loop
         for layers, hidden_dim, seed in itertools.product(HIDDEN_LAYERS_LIST, HIDDEN_DIMS_LIST, RANDOM_SEEDS):
             current_exp += 1
             print(f"   [{current_exp}/{total_experiments}] Model: {layers}x{hidden_dim} | Seed: {seed}")
             
-            # Postavljamo parametre u config (da bi Logger i Trainer znali)
             config.BASELINE_LAYERS = layers
             config.BASELINE_HIDDEN_DIM = hidden_dim
             config.RANDOM_SEED = seed
             
-            # Set seed (reproducibility)
             torch.manual_seed(seed)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed(seed)
@@ -88,8 +78,6 @@ def run_sweep():
             ).to(config.DEVICE)
             
             # Init Trainer
-            # Paznja: ExperimentLogger se inicijalizuje unutar Trainera
-            # Trainer ce povuci parametre iz config-a koji smo upravo izmenili
             trainer = BaselineTrainer(
                 model=model,
                 train_loader=train_loader,
@@ -100,7 +88,6 @@ def run_sweep():
             # Run Training
             trainer.run_training()
             
-            # Opciono: Oslobodi memoriju
             del model
             del trainer
             torch.cuda.empty_cache()
